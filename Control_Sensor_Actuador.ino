@@ -1,19 +1,21 @@
+// Incluye las librerías necesarias
 #include <Wire.h>
 #include <Stepper.h>
 #include "Adafruit_TCS34725.h"
 
-// Inicialización del sensor de color
+// Inicializa el sensor de color
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 
-// Definición de constantes para estados de relé
-#define RELAY_ON 0
+// Define constantes para estados de relés
+#define RELAY_ON 0    
 #define RELAY_OFF 1
 
-// Definición de constantes para el motor paso a paso
+// Define constantes para el motor paso a paso
 const int stepsPerRevolution = 2048;
 const int motSpeed = 15;
 
-// Inicialización del motor paso a paso
+// Declaración de variables
+int i = 0;
 Stepper myStepper(stepsPerRevolution, 2, 4, 3, 6);
 
 void setup() {
@@ -25,80 +27,92 @@ void setup() {
   if (tcs.begin()) {
     Serial.println("Inicializando...");
     delay(2000);
-  } else {
+  }
+  else {
     Serial.println("Error...");
-    Serial.println("Debe revisar las conexiones...");
+    Serial.println("Debe de revisar las conexiones...");
     while (1) delay(500);
   }
 
-  // Configuración y apagado inicial de los relés
-  int relayPins[] = {8, 9, 10, 11};
-  for (int i = 0; i < 4; i++) {
-    pinMode(relayPins[i], OUTPUT);
-    digitalWrite(relayPins[i], RELAY_OFF);
-  }
+  // Configuración inicial de los relés
+  digitalWrite(11, RELAY_OFF);
+  digitalWrite(10, RELAY_OFF);
+  digitalWrite(9, RELAY_OFF);
+  digitalWrite(8, RELAY_OFF);
+
+  // Definición de pines como salida
+  pinMode(11, OUTPUT);
+  pinMode(10, OUTPUT);
+  pinMode(9, OUTPUT);
+  pinMode(8, OUTPUT);
 }
 
 void loop() {
-  // Lectura de valores de color
-  uint16_t R, G, B, C;
+  // Variables de control en el espectro RGB
+  uint16_t R, G, B, C; // Valores de color: Rojo, Verde, Azul, y Clear (luz ambiente)
   tcs.getRawData(&R, &G, &B, &C);
 
-  // Asegurarse de que los valores de color no superen 255
+  // Asegura que los valores de color no superen 255
   R = min(R, 255);
   G = min(G, 255);
   B = min(B, 255);
 
-  // Acumulación de valores de color rojo y verde
-  static float red = 0, green = 0;
+  // Variables de control para los actuadores
+  float red = 0, green = 0;
   red += float(R);
   green += float(G);
+  i++;
 
-  // Contador para acumulación
-  static int i = 0;
-
-  if (i > 4) {
+  if (i > 4) { // Después de acumular 5 lecturas, realiza la comparación
     if (red > green && int(B) <= 70) {
       red /= 5;
+
+      // Activa el motor paso a paso
       myStepper.step(stepsPerRevolution);
       Serial.println("Se detectó el color rojo");
       Serial.println("Rojo = " + String(R) + "\n");
 
-      // Configuración de pines PWM y control de relés
-      analogWrite(11, 255);  // Activa color rojo
-      analogWrite(10, 0);
-      analogWrite(9, 0);
+      // Configura los pines PWM y controla los relés
+      analogWrite(11, R=255);
+      analogWrite(10, G=0);
+      analogWrite(9, B=0);
       delay(2000);
-      toggleRelay(9, 1000);  // Controla relé 9
-      toggleRelay(8, 1000);  // Controla relé 8
-    } else if (green > red && int(B) >= 35) {
+      controlRelay(9, RELAY_ON, 1000); // Activa relé 9
+      controlRelay(9, RELAY_OFF, 1000); // Desactiva relé 9
+      controlRelay(8, RELAY_ON, 1000); // Activa relé 8
+      controlRelay(8, RELAY_OFF, 1000); // Desactiva relé 8
+    }
+    
+    if (green > red && int(B) >= 35){
       green /= 5;
+
       Serial.println("Se detectó el color verde");
       Serial.println("Verde = " + String(G) + "\n");
 
-      // Configuración de pines PWM y control de relés
-      analogWrite(11, 0);
-      analogWrite(10, 255);  // Activa color verde
-      analogWrite(9, 0);
+      // Configura los pines PWM y controla los relés
+      analogWrite(11, R=0);
+      analogWrite(10, G=255);
+      analogWrite(9, B=0);
       delay(2000);
-      toggleRelay(11, 1000);  // Controla relé 11
-      toggleRelay(10, 1000);  // Controla relé 10
+      controlRelay(11, RELAY_ON, 1000); // Activa relé 11
+      controlRelay(11, RELAY_OFF, 1000); // Desactiva relé 11
+      controlRelay(10, RELAY_ON, 1000); // Activa relé 10
+      controlRelay(10, RELAY_OFF, 1000); // Desactiva relé 10
     }
-    // Reiniciar acumuladores y contador
+    
+    // Reinicia las variables de acumulación y el contador
     red = 0;
     green = 0;
     i = 0;
   }
 
-  // Imprimir valores de color
-  Serial.println("R = " + String(R) + " G = " + String(G) + " B = " + String(B));
+  // Imprime los valores de color
+  Serial.println(" R= " + String(R) + " G= " + String(G) + " B= " + String(B));
   delay(1000);
 }
 
-// Función para activar y desactivar un relé con un retardo
-void toggleRelay(int pin, int delayTime) {
-  digitalWrite(pin, RELAY_ON);
-  delay(delayTime);
-  digitalWrite(pin, RELAY_OFF);
+// Función para controlar un relé con retardo
+void controlRelay(int pin, int state, int delayTime) {
+  digitalWrite(pin, state);
   delay(delayTime);
 }
